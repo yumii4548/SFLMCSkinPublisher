@@ -169,7 +169,7 @@ def add_logo(img: Image.Image, logo_path: str | Path,
 
 def process_image(render_path: str | Path,
                   output_path: str | Path | None = None) -> Path:
-    """完整后处理：裁剪 1:1 + 加 logo，输出最终图片。"""
+    """完整后处理：固定裁剪中间 1080×1080 → 缩放 1000×1000 + 加 logo。"""
     render_path = Path(render_path)
     if output_path is None:
         output_path = render_path.parent / "final.png"
@@ -179,8 +179,20 @@ def process_image(render_path: str | Path,
     img = Image.open(render_path)
     print(f"[image_post] 原始渲染尺寸: {img.size}")
 
-    square = crop_centered_square(img, config.OUTPUT_SIZE)
-    print(f"[image_post] 裁剪为 1:1: {square.size}")
+    w, h = img.size
+    # 固定裁剪 x 轴 406~1486（宽1080），y 轴不变
+    crop_left = 406
+    crop_right = 1486
+    if w < crop_right:
+        # 图片不够宽则居中取1080
+        crop_left = max(0, (w - 1080) // 2)
+        crop_right = crop_left + 1080
+    cropped = img.crop((crop_left, 0, crop_right, h))
+    print(f"[image_post] 裁剪中间区域: {cropped.size} (x:{crop_left}~{crop_right})")
+
+    # 缩放到 1000×1000
+    square = cropped.resize((config.OUTPUT_SIZE, config.OUTPUT_SIZE), Image.LANCZOS)
+    print(f"[image_post] 缩放为: {square.size}")
 
     final = add_logo(square, config.LOGO_PATH,
                      config.LOGO_SCALE, config.LOGO_OPACITY, config.LOGO_TOP_MARGIN)
