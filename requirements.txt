@@ -1,0 +1,6 @@
+# MC 皮肤自动上架工具依赖
+# 安装： pip install -r requirements.txt
+#        playwright install chromium
+
+Pillow>=10.0.0
+playwright>=1.40.0
