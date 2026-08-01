@@ -1,1 +1,173 @@
-# SFLMCSkinPublisher
+# MC 皮肤自动上架工具 - 使用教程
+
+by 极鱼社 SwiftFishLab
+
+---
+
+## 一、环境准备
+
+### 1. 安装 Python 依赖
+```bash
+pip install playwright Pillow
+playwright install chromium
+```
+
+### 2. 确认 Blender 已安装
+程序需要调用本地 Blender 进行渲染，默认路径：
+```
+D:\desktop\工作室\工作室文件\MC皮肤渲染
+```
+文件夹内需有预设模型：`Steve-造型5.blend`（粗手臂）和 `Alex-造型5.blend`（细手臂）。
+
+### 3. 首次运行 - 添加账号
+```bash
+python main.py --add-account myaccount
+```
+浏览器会自动打开 mcdev 网站，手动登录后关闭浏览器即可保存登录态。
+
+---
+
+## 二、准备压缩包
+
+将 **info.txt** 和 **皮肤展开图.png** 打包成一个 zip 文件。
+
+### info.txt 格式（推荐 key=value 写法）
+
+**钻石定价示例：**
+```
+name=我的超酷皮肤
+author=作者名
+price_type=1
+price_value=300
+desc=这是一个很棒的皮肤简介
+arm=粗
+```
+
+**绿宝石定价示例：**
+```
+name=绿宝石皮肤
+author=作者名
+price_type=2
+price_value=30
+desc=绿宝石专属皮肤
+arm=细
+```
+
+**免费定价示例：**
+```
+name=免费福利皮肤
+author=作者名
+price_type=3
+desc=免费送给大家
+arm=粗
+```
+
+### 字段说明
+
+| 字段 | 说明 | 可选值 |
+|------|------|--------|
+| name | 资源名称 | 任意文本 |
+| author | 作者名 | 任意文本 |
+| price_type | 定价类型 | 1=钻石, 2=绿宝石, 3=免费 |
+| price_value | 定价数值 | 钻石/绿宝石时填数字（如 300、30），免费时省略 |
+| desc | 简介 | 任意文本 |
+| arm | 手臂类型 | 粗/thick/steve 或 细/thin/alex |
+
+### 压缩包结构
+```
+my_skin.zip
+├── info.txt      # 元信息
+└── skin.png      # 皮肤展开图（128×128 或 64×64）
+```
+
+---
+
+## 三、运行程序
+
+### 完整流程（渲染 + 自动上架）
+```bash
+python main.py my_skin.zip
+```
+
+### 指定账号发布
+```bash
+python main.py my_skin.zip --account myaccount
+```
+
+### 指定手臂类型（覆盖 info.txt 里的设置）
+```bash
+python main.py my_skin.zip --arm thick
+```
+
+### 只渲染不上架（生成图片后手动操作）
+```bash
+python main.py my_skin.zip --skip-publish
+```
+
+### 跳过渲染，用已有图片直接上架
+```bash
+python main.py my_skin.zip --skip-render --image final.png
+```
+
+### 查看已有账号列表
+```bash
+python main.py --list-accounts
+```
+
+---
+
+## 四、程序流程说明
+
+1. **解析压缩包** - 读取 info.txt 和皮肤 PNG
+2. **Blender 渲染** - 根据手臂类型自动调用对应模型渲染
+3. **图片后处理** - 裁剪为 1000×1000 人物居中图片 + 叠加半透明 logo
+4. **自动上架** - 登录 mcdev 网站，自动填写表单并上传所有文件
+
+上架过程中浏览器会保持打开状态，完成后手动确认即可。
+
+---
+
+## 五、定价对照表
+
+### 钻石档位
+| 数值 | 对应档位 | 操作 |
+|------|----------|------|
+| 300 | 第1档 | 点下拉第1项 |
+| 600 | 第2档 | 点下拉第2项 |
+| 1000 | 第3档 | 点下拉第3项 |
+| 2000 | 第4档 | 点下拉第4项 |
+| 5000 | 第5档 | 点下拉第5项 |
+| 10000 | 第6档 | 点下拉第6项 |
+| 20000 | 第7档 | 点下拉第7项 |
+
+### 绿宝石档位
+| 数值 | 操作 |
+|------|------|
+| 10 | 预设值，不动 |
+| 30 | 点 + 按钮 2 下 |
+| 50 | 点 + 按钮 4 下 |
+| 100 | 点 + 按钮 9 下 |
+
+---
+
+## 六、常见问题
+
+### Q: 首次运行提示需要登录？
+A: 使用 `--add-account` 添加账号，手动登录一次后自动保存登录态。
+
+### Q: Blender 路径不对？
+A: 修改 `config.py` 中的 `BLENDER_MODEL_DIR` 路径。
+
+### Q: 网页选择器失效？
+A: 网站更新后可能导致选择器变化，使用 `--inspect` 打开浏览器手动校准。
+
+### Q: 上传图片时弹出资源管理器窗口？
+A: 程序已通过 Playwright 的 filechooser 拦截机制自动处理，正常不会弹出。
+
+---
+
+## 七、联系方式
+
+资源定制、技术咨询、交流反馈欢迎加入 QQ 群：**914029611**
+
+©2026 SwiftFishLab All Right Reserved
