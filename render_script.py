@@ -238,7 +238,8 @@ def main():
     scn.render.image_settings.color_mode = "RGBA"
     if hasattr(scn, "cycles"):
         scn.cycles.samples = args.samples
-        scn.cycles.use_denoising = True
+        # 关闭降噪避免 OIDN 内存不足崩溃；用较高采样数补偿画质
+        scn.cycles.use_denoising = False
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     bpy.ops.render.render(write_still=True)

@@ -58,7 +58,18 @@ class McdevPublisher:
             headless=self.headless,
             slow_mo=self.slow_mo,
             viewport={"width": 1440, "height": 900},
-            args=["--start-maximized"],
+            args=[
+                "--start-maximized",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                "--disable-backgrounding-occluded-windows",
+                "--memory-pressure-off",
+            ],
         )
         self._page = self._context.pages[0] if self._context.pages else self._context.new_page()
         print(f"[publisher] 使用账号: {self.account}  (profile: {profile_dir})")

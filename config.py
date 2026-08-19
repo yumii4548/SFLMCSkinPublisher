@@ -296,3 +296,112 @@ SELECTORS = {
 
 # 上传图片前的等待（ms），给 SPA 渲染时间
 ACTION_DELAY_MS = 800
+
+# ============================================================
+# 6. 邮件通知（网易企业邮箱 SMTP）
+# ============================================================
+
+# —— SMTP 服务器 ——
+SMTP_SERVER = "smtp.qiye.163.com"
+SMTP_PORT = 587
+SMTP_USE_SSL = False  # 587 用 STARTTLS
+
+# —— 发件人 ——
+SENDER_NAME = "极鱼社 SwiftFishLab"
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "")  # 请通过环境变量提供，勿提交密码到仓库
+
+# —— 收件人（审核团队邮箱）——
+# 可通过环境变量 REVIEWER_EMAIL 覆盖，或命令行 --email-to
+REVIEWER_EMAIL = os.environ.get("REVIEWER_EMAIL", "")
+
+# —— 账号 → 发布账号显示名映射 ——
+ACCOUNT_DISPLAY_NAMES = {
+    "chym": "沧海月明",
+    # 更多账号在此添加，未匹配的默认显示 "极鱼社O组"
+}
+DEFAULT_PUBLISH_ACCOUNT = "极鱼社O组"
+
+# —— 邮件底部 slogan 宣传图 ——
+SLOGAN_IMAGE_PATH = PROMO_IMAGE_PATH  # 默认复用宣传图，也可单独指定
+
+# —— 邮件模板 ——
+EMAIL_SUBJECT_TEMPLATE = "我的世界中国版开发者极鱼社对外代投审核状态通知 - {name}"
+
+# 正文模板（审核通过时）—— 含上架时间
+EMAIL_BODY_APPROVED = """\
+<html><body>
+<p>资源名称：{name} - {author}</p>
+<p>内审评议意见：同意</p>
+<p>网易开平审核：同意</p>
+<p>上架时间：{publish_time}</p>
+<p>发布账号：{publish_account}</p>
+<br>
+<p><img src="cid:slogan" style="max-width:100%"></p>
+</body></html>"""
+
+# 正文模板（审核不通过时）—— 含理由
+EMAIL_BODY_REJECTED = """\
+<html><body>
+<p>资源名称：{name} - {author}</p>
+<p>内审评议意见：同意</p>
+<p>网易开平审核：不同意</p>
+<p>理由：已有相似皮肤，需添加更多原创元素</p>
+<p>发布账号：{publish_account}</p>
+<br>
+<p><img src="cid:slogan" style="max-width:100%"></p>
+</body></html>"""
+
+# ============================================================
+# 7. 网易邮箱网页端 云端定时发信（webmail_scheduler.py）
+# ============================================================
+# 原理：定时发信在网易网页版写信界面设置后，邮件存到网易云端（草稿箱/定时发信列表），
+# 到点由网易服务器自动发出 —— 电脑关机也不影响。SMTP 协议本身没有定时能力，故走浏览器自动化。
+# 首次使用需：① --add-mail-account 手动登录一次存登录态；② --inspect-mail 校准选器。
+
+# 邮箱入口（企业邮 qiye.163.com；普通 163 可改 https://mail.163.com/）
+MAIL_WEB_URL = "https://qiye.163.com/"
+
+# 直达写信页 URL（网易写信页带 session 参数，留空更稳：打开入口后点「写信」按钮）
+MAIL_COMPOSE_URL = ""
+
+# 邮件专用浏览器 profile（与 mcdev accounts/ 隔离，登录态独立、可长期复用）
+MAIL_PROFILE_DIR = Path(__file__).parent / "mail_profile"
+
+# 定时发送调度方式：
+#   auto    = 优先云端定时发信（提交前失败才回退 Windows 计划任务；结果未知不回退，防双发）
+#   webmail = 强制云端定时发信（失败不发送）
+#   task    = 强制 Windows 计划任务（旧方式）
+# 可用环境变量 MAIL_SCHEDULER_MODE 覆盖（如 MAIL_SCHEDULER_MODE=task）
+MAIL_SCHEDULER_MODE = os.environ.get("MAIL_SCHEDULER_MODE", "auto").strip().lower()
+
+# 网易写信页选择器骨架（真实 DOM 以 qiye.163.com 为准，用 --inspect-mail 校准后回填）。
+# 与 SELECTORS 相同的「语义 + 备选」写法：逗号分隔，逐个尝试。
+MAIL_SELECTORS = {
+    # —— 登录态检测 ——
+    "mail_logged_in": "a:has-text('退出'), a:has-text('退出登录'), .js-component-logout, [data-mod='logout']",
+    "mail_login_page": "input[type='password'], input[name='password'], .login-form, .mail-login",
+    # —— 导航 ——
+    "btn_write_mail": "a:has-text('写信'), button:has-text('写信'), .js-component-write, [title='写信']",
+    # —— 写信字段 ——
+    "input_to": "div.nui-editableAddr-ipt, [id*='To'] div[contenteditable='true'], input[placeholder*='收件人'], .nui-ipt-input input[placeholder*='收件人']",
+    "btn_cc": "a:has-text('抄送'), button:has-text('抄送'), span:has-text('抄送')",
+    "input_cc": "div.nui-editableAddr-ipt, input[placeholder*='抄送'], [id*='Cc'] div[contenteditable='true']",
+    "input_subject": "input[placeholder*='主题'], .nui-ipt-input input[placeholder*='主题'], [id*='Subject'] input",
+    "editor_body": "iframe[id*='_mail']:visible, iframe.kmEditor:visible, div[contenteditable='true'][id*='_mail'], div.kmEditor",
+    # —— 正文插图 / 附件 ——
+    "btn_insert_image": "button[title*='图片'], button[title*='插入图片'], .nui-ico-image, [class*='toolbar'] button[title*='图片']",
+    "btn_attach": "button[title*='附件'], .nui-ico-attach, [class*='attach'] button, button[title*='回形针']",
+    # —— 定时发信 ——
+    "btn_timed_send": "span:has-text('定时发信'), a:has-text('定时发信'), button:has-text('定时发信'), .nui-ico-more",
+    "btn_more_options": "a:has-text('更多选项'), button:has-text('更多选项'), .nui-ico-more",
+    "option_timed_send": "li:has-text('定时发信'), .nui-menu-item:has-text('定时发信'), div:has-text('定时发信')",
+    "timed_date_open": "input[placeholder*='日期'], input[placeholder*='选择日期'], [class*='date'] input, .nui-ico-calendar",
+    "timed_date_input": "input[placeholder*='日期'], input[placeholder*='选择日期'], [class*='date'] input",
+    "timed_time_hour": "select[data-placeholder*='时'], input[placeholder*='时'], [class*='hour']",
+    "timed_time_min": "select[data-placeholder*='分'], input[placeholder*='分'], [class*='minute']",
+    # —— 发送 / 确认 / 成功 ——
+    "btn_send": "button:has-text('发送'), .nui-btn-primary:has-text('发送'), [id*='send'] button, button:has-text('定时发信')",
+    "btn_confirm_timed": "button:has-text('确定'), button:has-text('确认'), .nui-btn-primary:has-text('确定')",
+    "success_toast": "text=发送成功, text=已发送, text=定时发送成功, .nui-msg, .nui-toast",
+}

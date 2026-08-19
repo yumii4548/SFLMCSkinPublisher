@@ -53,6 +53,7 @@ import config
 from parser import parse_zip, SkinPackage
 import blender_render
 import image_post
+import email_sender
 
 
 def build_description(pkg: SkinPackage) -> str:
@@ -75,7 +76,12 @@ def build_description(pkg: SkinPackage) -> str:
 
 def run_pipeline(zip_path: str, account: str, arm_override: str | None = None,
                  skip_render: bool = False, skip_publish: bool = False,
-                 existing_image: str | None = None, headless_publish: bool = False):
+                 existing_image: str | None = None, headless_publish: bool = False,
+                 send_email: bool = False, email_to: str | None = None,
+                 email_only: bool = False,
+                 review_result: str = "同意", publish_time: str = "",
+                 publish_account: str | None = None,
+                 schedule_time: str = "", scheduler: str = "auto"):
     print("=" * 60)
     print("MC 皮肤自动上架工具")
     print("程序作者：极鱼社 SwiftFishLab")
@@ -113,8 +119,29 @@ def run_pipeline(zip_path: str, account: str, arm_override: str | None = None,
         final_image = image_post.process_image(render_path)
         print(f"  最终图: {final_image}")
 
+        # 释放渲染占用的内存，避免 Playwright 浏览器启动时 MemoryError
+        import gc
+        gc.collect()
+        print("  已回收内存")
+
+    # ---- email_only 模式：跳过发布，直接发邮件 ----
+    if email_only:
+        print("\n[email_only] 跳过发布，仅发送审核邮件...")
+        if existing_image:
+            final_image = Path(existing_image)
+        # 否则使用上面渲染步骤设置的 final_image
+        _do_send_email(pkg, arm, final_image, email_to,
+                       review_result, publish_time, publish_account,
+                       schedule_time, scheduler)
+        return final_image
+
     if skip_publish:
         print("\n[4/4] 已跳过网页发布（--skip-publish）。")
+        # 即使跳过发布，如果指定了 --send-email 也可以发
+        if send_email:
+            _do_send_email(pkg, arm, final_image, email_to,
+                           review_result, publish_time, publish_account,
+                           scheduler=scheduler)
         print(f"\n完成。最终图片: {final_image}")
         return final_image
 
@@ -155,6 +182,11 @@ def run_pipeline(zip_path: str, account: str, arm_override: str | None = None,
 
     if ok:
         print("\n✓ 发布成功！浏览器保持打开，可手动检查。")
+        # 发布成功后自动发送审核邮件
+        if send_email:
+            _do_send_email(pkg, arm, final_image, email_to,
+                           review_result, publish_time, publish_account,
+                           scheduler=scheduler)
     else:
         print("\n✗ 发布未完成，浏览器保持打开，请检查。")
     print("[提示] 浏览器保持打开状态，关闭窗口或按 Ctrl+C 退出。")
@@ -164,6 +196,31 @@ def run_pipeline(zip_path: str, account: str, arm_override: str | None = None,
         pass
     pub.__exit__(None, None, None)
     return final_image
+
+
+def _do_send_email(pkg: SkinPackage, arm: str, final_image: Path | None,
+                   email_to: str | None,
+                   review_result: str = "同意",
+                   publish_time: str = "",
+                   publish_account: str | None = None,
+                   schedule_time: str = "",
+                   scheduler: str = "auto") -> bool:
+    """发送审核邮件的内部辅助函数。"""
+    print(f"\n[邮件] 发送审核邮件...")
+    to_list = None
+    if email_to:
+        to_list = [e.strip() for e in email_to.split(",") if e.strip()]
+    return email_sender.send_review_email(
+        name=pkg.name,
+        author=pkg.author,
+        review_result=review_result,
+        publish_time=publish_time,
+        publish_account=publish_account,
+        final_image=str(final_image) if final_image else None,
+        to_emails=to_list,
+        schedule_time=schedule_time,
+        scheduler=scheduler,
+    )
 
 
 def main():
@@ -185,6 +242,30 @@ def main():
     ap.add_argument("--list-accounts", action="store_true", help="列出所有已创建账号")
     ap.add_argument("--add-account", default=None, metavar="NAME",
                     help="创建/登录一个新账号（打开浏览器手动登录后保存）")
+
+    # 邮件参数
+    ap.add_argument("--send-email", action="store_true",
+                    help="发布成功后自动发送审核邮件")
+    ap.add_argument("--email-only", action="store_true",
+                    help="仅发送审核邮件，跳过渲染和发布（需配合 --image 指定图片）")
+    ap.add_argument("--email-to", default=None, metavar="EMAIL",
+                    help="审核邮件收件人（多个用逗号分隔，覆盖 config.REVIEWER_EMAIL）")
+    ap.add_argument("--review-result", default="同意", choices=["同意", "不同意"],
+                    help="网易开平审核结果（默认: 同意）")
+    ap.add_argument("--publish-time", default="", metavar="TIME",
+                    help="上架时间，如 \"2026-08-03 17:50\"（审核通过时使用）")
+    ap.add_argument("--publish-account", default=None, metavar="ACCOUNT",
+                    help="发布账号标识（如 chym），未指定默认极鱼社O组")
+    ap.add_argument("--time", default="", metavar="TIME",
+                    help='定时发送审核邮件时间，如 "2026/8/14 17:00:00"，'
+                         '到点才发送（配合 --send-email 或 --email-only）')
+    ap.add_argument("--scheduler", default="auto", choices=["auto", "webmail", "task"],
+                    help="定时发送审核邮件的方式：auto=优先网易云端(失败回退计划任务) "
+                         "/ webmail=强制云端(关机也能发) / task=强制Windows计划任务")
+    ap.add_argument("--inspect-mail", action="store_true",
+                    help="校准网易邮箱写信/定时发信选择器")
+    ap.add_argument("--add-mail-account", action="store_true",
+                    help="首次登录网易邮箱并保存网页端登录态（云端定时发信前置步骤）")
     args = ap.parse_args()
 
     # 账号管理
@@ -208,6 +289,16 @@ def main():
         inspect(account=args.account)
         return
 
+    if args.add_mail_account:
+        from webmail_scheduler import add_mail_account
+        add_mail_account(headless=args.headless)
+        return
+
+    if args.inspect_mail:
+        from webmail_scheduler import inspect_mail
+        inspect_mail(headless=args.headless)
+        return
+
     if not args.zip:
         ap.print_help()
         sys.exit(1)
@@ -228,6 +319,14 @@ def main():
         skip_publish=args.skip_publish,
         existing_image=args.image,
         headless_publish=args.headless,
+        send_email=args.send_email,
+        email_to=args.email_to,
+        email_only=args.email_only,
+        review_result=args.review_result,
+        publish_time=args.publish_time,
+        publish_account=args.publish_account,
+        schedule_time=args.time,
+        scheduler=args.scheduler,
     )
 
 
